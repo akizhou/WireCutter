@@ -1,4 +1,5 @@
-/* @file WireCutter.ino
+/* 
+ * @file WireCutter.ino
  * @version 1.0
  * This is the application file of LA26 auto wire cutter
  * 
@@ -8,27 +9,16 @@
  
 #include "WireCutter.h"
 
-WireCutter protoType; //object declaration
+// object declaration
+WireCutter bob; // yes our wire cutter is named Bob
 
 void setup() {
-  protoType.assignPins();
+  bob.setup();
 }
 
 void loop() {
-  int numCut = 0;
-  bool ready2Feed = false;
-  bool ready2Cut = false;
-
-  protoType.prompt();
-  
-  while(numCut != protoType.getNumWire()){
-    ready2Feed = protoType.releaseWire();
-    
-    ready2Cut = protoType.feedWire(ready2Feed);
-    
-    protoType.cutWire(ready2Cut);
-
-    numCut++;
-  }
-  
+  Serial.println("");
+  Serial.println("Session starts");
+  bob.runFSM();
+  delay(1000);
 }
