@@ -41,10 +41,16 @@ class WireCutter{
     node::SubStates2 currentSubState2;
 
     // variables
-    //Vector<Wire> wires;
+    //Vector<Wire> tasks;
+    int tasks[5][3] = {{0}};
+    
+    int numTask;
+    int numTaskCompleted;
+    
     int slot;
     int lengthWire;
     int numWire;
+    
     int numCut;
     char key;
 
@@ -55,7 +61,6 @@ class WireCutter{
 
     void userInput(int nMax, int lowLim, int upLim, bool timer, bool back, node::SubStates1 subState);
     
-    void defineTasks();
     void releaseWire();
     void feedWire();
     void cutWire();

@@ -10,7 +10,8 @@
 #include "WireCutter.h"
 #include <Keypad.h>
 #include <LiquidCrystal.h>
-#include <Stepper.h>
+//#include <Stepper.h>
+#include <CheapStepper.h>
 
 /*
  * This section is for parts set ups and pin assignments
@@ -42,13 +43,20 @@ byte solenoid2 = 47;
 byte solenoid3 = 51;
 
 // Stepper motors
+/*
 // spr = steps per revolution
-const int sprWheelStepper = 64; // 28BYJ-48
-const int sprCutterStepper = 200; // 17HS13-0404S
-int speedWheelStepper = 200;
-int speedCutterStepper = 100;
+const int sprWheelStepper = 4096; // 28BYJ-48
+const int sprCutterStepper = 4096; // 17HS13-0404S
+int speedWheelStepper = 1;
+int speedCutterStepper = 1;
 Stepper wheelStepper(sprWheelStepper, 2, 3, 4, 5);
 Stepper cutterStepper(sprCutterStepper, 18, 19, 20, 21);
+*/
+const bool CLOCKWISE = true;
+const bool COUNTERCLOCKWISE = false;
+
+CheapStepper wheelStepper(2, 3, 4, 5);
+CheapStepper cutterStepper(23, 25, 27, 29);
 
 void WireCutter::setup(){
   Serial.begin(9600);
@@ -62,8 +70,10 @@ void WireCutter::setup(){
   pinMode(solenoid2, OUTPUT);
   pinMode(solenoid3, OUTPUT);
 
-  wheelStepper.setSpeed(speedWheelStepper);
-  cutterStepper.setSpeed(speedCutterStepper);
+  //wheelStepper.setSpeed(speedWheelStepper);
+  //cutterStepper.setSpeed(speedCutterStepper);
+  wheelStepper.setRpm(5);
+  cutterStepper.setRpm(10);
 }
 
 /*
@@ -73,10 +83,13 @@ void WireCutter::setup(){
 WireCutter::WireCutter(){
   currentSuperState = node::IDLE;
   currentSubState1 = node::WIRE_SELECTION;
-  currentSubState2 = node::RELEASE;
+  currentSubState2 = node::DEFINE_TASK;
+  
+  numTask = 0;
   slot = 0;
   lengthWire = 0;
   numWire = 0;
+  
   numCut = 0;
   key = NO_KEY;
 }
@@ -129,7 +142,7 @@ void WireCutter::prompt(){
       lcd.clear();
       Serial.println("Define length");
       lcd.print("Input length");
-      userInput(3, 10, 300, modeOFF, modeON, node::DEFINE_LENGTH);
+      userInput(3, 10, 250, modeOFF, modeON, node::DEFINE_LENGTH);
       return;
       
     case node::DEFINE_NUMBER:
@@ -142,10 +155,12 @@ void WireCutter::prompt(){
     case node::CONFIRM_TASKS:
       lcd.clear();
       Serial.println("Confirm task");
-      lcd.print("Confirm task");
+      lcd.print("Confirm task = #");
+      lcd.setCursor(0,2);
+      lcd.print("Back = *");  
       
       key = NO_KEY; // reset the key
-      while((key != '*') && (key != '#')){
+      while(key == NO_KEY){
         key = keypad.getKey();
       }
       
@@ -153,14 +168,40 @@ void WireCutter::prompt(){
         currentSubState1 = node::DEFINE_NUMBER;
       }
       else if(key == '#'){
-        Serial.print("Slot: "); Serial.println(slot);
-        Serial.print("Length: "); Serial.println(lengthWire);
-        Serial.print("Number: "); Serial.println(numWire);
+        
+        //Wire newWire(slot, lengthWire, numWire);
+        //tasks.push_back(newWire);
+        tasks[numTask][0] = slot;
+        tasks[numTask][1] = lengthWire;
+        tasks[numTask][2] = numWire;
+        numTask++;
+
         currentSubState1 = node::WIRE_SELECTION;
         currentSuperState = node::PROCESS;
       }
-      //else{ currentSubState1 = node::WIRE_SELECTION;
-      // multiple task command
+      else{
+        
+        //Wire newWire(slot, lengthWire, numWire);
+        //tasks.push_back(newWire);
+        tasks[numTask][0] = slot;
+        tasks[numTask][1] = lengthWire;
+        tasks[numTask][2] = numWire;
+        numTask++;
+
+        if(numTask == 2){
+          lcd.clear();
+          lcd.print("MaxTasks reached");
+          lcd.setCursor(0,2);
+          lcd.print("Start processing");
+          delay(1000);
+          currentSubState1 = node::WIRE_SELECTION;
+          currentSuperState = node::PROCESS;
+          return;
+        }
+        
+        currentSubState1 = node::WIRE_SELECTION;
+        currentSuperState = node::PROMPT;
+      }
       return;
   }
 }
@@ -218,8 +259,8 @@ void WireCutter::userInput(int nMax, int lowLim, int upLim, bool offTimer, bool 
             currentSubState1 = node::WIRE_SELECTION;
             return;
           case node::DEFINE_NUMBER:
-             currentSubState1 = node::DEFINE_LENGTH;
-             return;
+            currentSubState1 = node::DEFINE_LENGTH;
+            return;
         }
       }
       else if(key == NO_KEY){
@@ -283,23 +324,45 @@ char timer(int lengthTime){
 
 void WireCutter::process(){
   switch(currentSubState2){
-    //case node::DEFINE_TASK: 
+    case node::DEFINE_TASK:
+                                                                        Serial.print("numer of tasks stored: ");  Serial.println(numTask);
+      if(numTaskCompleted < numTask){
+        Serial.print("Processing task "); Serial.println(numTaskCompleted + 1);
+        lcd.clear();
+        lcd.print("Task "); lcd.print(numTaskCompleted + 1); lcd.print(" / "); lcd.print(numTask);
+        
+        //slot = tasks[numTaskCompleted].getSlot();
+        //lengthWire = tasks[numTaskCompleted].getLength();
+        //numWire = tasks[numTaskCompleted].getNumber();
+        slot = tasks[numTaskCompleted][0];
+        lengthWire = tasks[numTaskCompleted][1];
+        numWire = tasks[numTaskCompleted][2];
+                                                                          Serial.print("working on array element: "); Serial.println(numTaskCompleted);
+                                                                          Serial.print("Slot: "); Serial.println(slot);
+                                                                    Serial.print("Length: "); Serial.println(lengthWire);
+                                                                      Serial.print("Number: "); Serial.println(numWire);
+
+        currentSubState2 = node::RELEASE;
+        return;
+      }
+      
+      numTask = 0;
+      numTaskCompleted = 0;                                   
+      currentSuperState = node::PROMPT;
+      
+      return;
+
+      
     case node::RELEASE:
-      lcd.clear();
       Serial.println("Release");
-      lcd.print("Processing");
       releaseWire();
       return;
     case node::FEED:
-      lcd.clear();
       Serial.println("Feed");
-      lcd.print("Processing");
       feedWire();
       return;
     case node::CUT:
-      lcd.clear();
       Serial.println("Cut");
-      lcd.print("Processing");
       cutWire();
       return;
   }
@@ -330,7 +393,11 @@ void WireCutter::feedWire(){
   lcd.setCursor(0,2);
   lcd.print(numCut); lcd.print(" / "); lcd.print(numWire); lcd.print(" cut");
     
-  wheelStepper.step(lengthWire);
+  //wheelStepper.step(lengthWire*10);
+  Serial.println(lengthWire);
+  delay(50);
+  wheelStepper.moveDegrees(CLOCKWISE, 45);
+  
   // lock whichever wire is unlocked
   switch(slot){
     case 1:
@@ -349,8 +416,14 @@ void WireCutter::feedWire(){
 }
 
 void WireCutter::cutWire(){
-  cutterStepper.step(50); ////////// test number of steps
-  cutterStepper.step(-50);
+  /*
+  cutterStepper.step(100);
+  delay(50);
+  cutterStepper.step(-100);
+  */
+  cutterStepper.moveDegrees(CLOCKWISE, 90);
+  delay(50);
+  cutterStepper.moveDegrees(COUNTERCLOCKWISE, 90);
   numCut++;
   Serial.print(numCut); Serial.print(" / "); Serial.print(numWire); Serial.println(" cut");
   
@@ -363,12 +436,13 @@ void WireCutter::cutWire(){
   else{
     lcd.clear();
     Serial.println("Session ending");
-    lcd.print("Process complete");
-    delay(5000); // 3s
+    lcd.print("Task complete");
+    delay(5000); // 5s
 
     numCut = 0;
-    currentSubState2 = node::RELEASE;
-    currentSuperState = node::PROMPT;
+    numTaskCompleted++;
+    currentSubState2 = node::DEFINE_TASK;
+    currentSuperState = node::PROCESS;
   }
   return;
 }
